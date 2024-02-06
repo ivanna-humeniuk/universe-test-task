@@ -6,7 +6,6 @@ import React from "react";
 export interface IProps {}
 export const PaymentPage: React.FC<IProps> = () => {
   const interactor = usePaymentPageInteractor();
-  // const router = useRouter()
 
   return (
     <PaymentPageRouter

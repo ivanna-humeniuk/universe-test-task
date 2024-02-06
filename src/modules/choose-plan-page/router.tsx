@@ -1,5 +1,11 @@
+import React, { useCallback, useEffect } from "react";
+import Head from "next/head";
+import Image from "next/image";
+import classNames from "classnames";
+import { useTranslation } from "next-i18next";
 import { LoadingAnimation } from "../../components/loading-animation";
 import { PrimaryButton } from "../../components/primary-button";
+import { InternalFileType } from "../../types/internal-file";
 import { PaymentPlanId } from "../../use-cases/get-subscription-products";
 import black_star from "./assets/black-star.svg";
 import fake_file from "./assets/fake-file.svg";
@@ -7,12 +13,7 @@ import green_check_b from "./assets/green-check-b.svg";
 import radio_off from "./assets/radio-off.svg";
 import radio_on from "./assets/radio-on.svg";
 import stars_doc_b from "./assets/stars_document-b.svg";
-import { IPaymentPageInteractor, InternalFileType } from "./interactor";
-import classNames from "classnames";
-import { useTranslation } from "next-i18next";
-import Head from "next/head";
-import Image from "next/image";
-import React from "react";
+import { IPaymentPageInteractor } from "./interactor";
 
 const BannerYourDocIsReady: React.FC<{}> = () => {
   const { t } = useTranslation();
@@ -43,35 +44,33 @@ export const PaymentPageRouter: React.FC<IProps> = ({ interactor, header }) => {
     onContinue,
     selectedPlan,
     onSelectPlan,
-    onCommentsFlip,
     imagePDF,
     isImageLoading,
     fileLink,
-    isSecondEmail,
-    isThirdEmail,
+    fileType,
+    isEmail,
+    getPlans,
+    isRemoteConfigLoading,
+    isPlansLoading
   } = interactor;
 
-  const isPDFFile = interactor.fileType === "PDF";
+  const isPDFFile = fileType === "PDF";
   const isImage =
-    interactor.fileType === InternalFileType.JPEG ||
-    interactor.fileType === InternalFileType.JPG ||
-    interactor.fileType === InternalFileType.PNG;
+    fileType === InternalFileType.JPEG ||
+    fileType === InternalFileType.JPG ||
+    fileType === InternalFileType.PNG;
   const { t } = useTranslation();
-  const plans = interactor.getPlans(t);
-  // const plan = plans.find((item) => item.id === interactor.selectedPlan)
+  const plans = getPlans(t);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (document.getElementsByClassName("swiper-wrapper")[0]) {
       // @ts-ignore
       document.getElementsByClassName("swiper-wrapper")[0].style.display =
         "flex";
     }
-  }, [interactor.isRemoteConfigLoading, interactor.isPlansLoading]);
+  }, [isRemoteConfigLoading, isPlansLoading]);
 
-  const [isHoveredLeft, setIsHoveredLeft] = React.useState(false);
-  const [isHoveredRight, setIsHoveredRight] = React.useState(false);
-
-  const renderImage = React.useCallback(() => {
+  const renderImage = useCallback(() => {
     if (isPDFFile) {
       if (imagePDF !== null) {
         return (
@@ -79,6 +78,7 @@ export const PaymentPageRouter: React.FC<IProps> = ({ interactor, header }) => {
             src={URL.createObjectURL(imagePDF)}
             width={312}
             height={472}
+            className="w-full h-auto"
             alt="file_img"
           />
         );
@@ -216,7 +216,7 @@ export const PaymentPageRouter: React.FC<IProps> = ({ interactor, header }) => {
 
                     {/* ==== for 2nd email and 3rd email the same layout ======*/}
 
-                    {(isSecondEmail || isThirdEmail) &&
+                    {isEmail &&
                       plan.id !== PaymentPlanId.ANNUAL && (
                         <div
                           className="flex justify-center items-center w-full bg-[#FF6A48] text-[#FFFFFF] text-[11px] leading-[18px]
@@ -284,10 +284,10 @@ export const PaymentPageRouter: React.FC<IProps> = ({ interactor, header }) => {
                             <>{plan.text}</>
                           ) : (
                             <>
-                              {!isSecondEmail && !isThirdEmail && (
+                              {!isEmail && (
                                 <>{plan.text}</>
                               )}
-                              {(isSecondEmail || isThirdEmail) && (
+                              {isEmail && (
                                 <>
                                   {" "}
                                   After 7 days, auto-renews{" "}

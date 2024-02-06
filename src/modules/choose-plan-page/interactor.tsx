@@ -1,4 +1,4 @@
-// import { EDIT_FILENAME_LC_KEY, EDIT_FILE_LC_KEY } from '@/common/constants'
+import React, { useCallback, useEffect, useState } from "react";
 import { useRemoteConfig } from "../../providers/remote-config-provider";
 import { useUser } from "../../providers/user-provider";
 import { API } from "../../services/api";
@@ -8,116 +8,48 @@ import {
   PaymentPlanId,
   useGetSubscriptionProducts,
 } from "../../use-cases/get-subscription-products";
+import { getTrialFormattedPrice, getAnnualFormattedPrice, getCurrency } from "../../utils/helpers";
 import check from "./assets/check.svg";
 import cross from "./assets/cross.svg";
 import { useRouter } from "next/router";
-import React from "react";
+import { PAGE_LINKS } from "../../types";
+import { InternalFileType } from "../../types/internal-file";
+import { imagesFormat } from "../../utils/constants";
+import { Plan } from "../../types/plan";
 
-export enum PAGE_LINKS {
-  MAIN = "/",
-  PAYMENT = "/payment",
-  DASHBOARD = "/dashboard",
-}
-
-export enum InternalFileType {
-  DOC = "DOC",
-  DOCX = "DOCX",
-  JPEG = "JPEG",
-  JPG = "JPG",
-  HEIC = "HEIC",
-  HEIF = "HEIF",
-  PDF = "PDF",
-  PNG = "PNG",
-  PPT = "PPT",
-  PPTX = "PPTX",
-  XLS = "XLS",
-  XLSX = "XLSX",
-  ZIP = "ZIP",
-  BMP = "BMP",
-  EPS = "EPS",
-  GIF = "GIF",
-  SVG = "SVG",
-  TIFF = "TIFF",
-  WEBP = "WEBP",
-  EPUB = "EPUB",
-}
-
-export const imagesFormat = [
-  InternalFileType.HEIC,
-  InternalFileType.SVG,
-  InternalFileType.PNG,
-  InternalFileType.BMP,
-  InternalFileType.EPS,
-  InternalFileType.GIF,
-  InternalFileType.TIFF,
-  InternalFileType.WEBP,
-  InternalFileType.JPG,
-  InternalFileType.JPEG,
-];
-
-export type Bullets = {
-  imgSrc: string;
-  bullText: JSX.Element;
-};
-
-export interface Plan {
-  id: PaymentPlanId;
-  title: string;
-  price: string;
-  date: string | null;
-  bullets: Bullets[];
-  bulletsC?: Bullets[];
-  text: string | JSX.Element;
-  formattedCurrency?: string;
-  fullPrice?: string;
-}
 
 export interface IPaymentPageInteractor {
   selectedPlan: PaymentPlanId;
   onSelectPlan: (plan: PaymentPlanId) => void;
   onContinue: (place?: string) => void;
-  onCommentsFlip: () => void;
 
   imagePDF: Blob | null;
   isImageLoading: boolean;
   fileType: string | null;
   fileLink: string | null;
-
-  isEditorFlow: boolean;
-  isSecondEmail: boolean;
-  isThirdEmail: boolean;
-
+  isEmail: boolean;
   isRemoteConfigLoading: boolean;
-  fileName: string | null;
 
   getPlans: (t: (key: string) => string) => Plan[];
   isPlansLoading: boolean;
 }
 
 export const usePaymentPageInteractor = (): IPaymentPageInteractor => {
+  const [selectedPlan, setSelectedPlan] = useState<PaymentPlanId>(PaymentPlanId.MONTHLY_FULL);
+  const [file, setFile] = useState<ApiFile>();
+  const [imagePDF, setImagePDF] = useState<Blob | null>(null);
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const [fileLink, setFileLink] = useState<string | null>(null);
+
   const router = useRouter();
-  const [selectedPlan, setSelectedPlan] = React.useState<PaymentPlanId>(
-    PaymentPlanId.MONTHLY_FULL
-  );
   const { products } = useGetSubscriptionProducts();
   const { user } = useUser();
-
-  const [file, setFile] = React.useState<ApiFile>();
-  const [imagePDF, setImagePDF] = React.useState<Blob | null>(null);
-  const [isImageLoading, setIsImageLoading] = React.useState(false);
-  const [fileLink, setFileLink] = React.useState<string | null>(null);
-
   const { abTests, isRemoteConfigLoading } = useRemoteConfig();
 
-  const onCommentsFlip = () => {
-    console.log("send event analytic0");
-  };
-
   const onSelectPlan = (plan: PaymentPlanId) => {
-    if (selectedPlan === plan) {
+        if (selectedPlan === plan) {
       setSelectedPlan(plan);
       onContinue("planTab");
-
       return;
     }
     setSelectedPlan(plan);
@@ -134,7 +66,7 @@ export const usePaymentPageInteractor = (): IPaymentPageInteractor => {
     );
   };
 
-  const onContinue = (place?: string) => {
+  const onContinue = useCallback((place?: string) => {
     console.log(
       "send event analytic2",
       "place: ",
@@ -142,91 +74,79 @@ export const usePaymentPageInteractor = (): IPaymentPageInteractor => {
       "planName: ",
       selectedPlan
     );
-
     localStorage.setItem("selectedPlan", selectedPlan);
 
     router.push({ pathname: `${PAGE_LINKS.PAYMENT}`, query: router.query });
-  };
+  }, []);
 
-  React.useEffect(() => {
+  const checkUserSubscription = useCallback(() => {
     if (user?.subscription !== null) {
       router.push(`${PAGE_LINKS.DASHBOARD}`);
     }
 
     if (!user?.email) {
       router.back();
-
-      return;
-    }
-
-    if (user?.email !== null) {
       return;
     }
 
     if (router.query?.token) {
       API.auth.byEmailToken(router.query.token as string);
     }
-  }, [user?.subscription, user?.email, router.query?.token]);
+  }, [user?.subscription, user?.email, router.query?.token])
+
+  useEffect(() => {
+    checkUserSubscription();
+  }, [checkUserSubscription]);
 
   // @NOTE: analytics on page rendered
-  React.useEffect(() => {
+  useEffect(() => {
     if (!localStorage.getItem("select_plan_view")) {
       console.log("send event analytic3");
+      localStorage.setItem("select_plan_view", "true");
     }
-
-    localStorage.setItem("select_plan_view", "true");
-
     return () => {
       localStorage.removeItem("select_plan_view");
     };
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     API.files.getFiles().then((res) => {
       if (router.query?.file) {
         const chosenFile = res.files.find(
-          (item) => item.id === router.query!.file
+          (item) => item.id === router.query?.file
         );
-
         setFile(chosenFile);
-
         return;
       }
       setFile(res.files[res.files.length - 1]);
     });
-  }, []);
+  }, [router.query]);
 
   // @NOTE: setting pre-select plan for users from remarketing emails
-  React.useEffect(() => {
+  useEffect(() => {
     if (router.query?.fromEmail === "true") {
       setSelectedPlan(PaymentPlanId.MONTHLY_FULL_SECOND_EMAIL);
       return;
     }
   }, [abTests]);
 
+  const getFileUrl = useCallback(async (fileId: string): Promise<string> => {
+    if (router.query?.editedFile === "true") {
+      return API.files.editedFile(fileId).then((r) => r.url);
+    } else {
+      return API.files.downloadFile(fileId).then((r) => r.url);
+    }
+  }, [router.query?.editedFile]);
+
   // @NOTE: generating cover for pdf-documents
-  const loadPdfCover = async (): Promise<void> => {
+  const loadPdfCover = useCallback(async (): Promise<void> => {
     if (!file || file.internal_type !== "PDF") {
       return;
     }
-
     setIsImageLoading(true);
 
     try {
-      const fileUrl = await (async () => {
-        if (router.query?.file) {
-          return router.query.editedFile === "true"
-            ? API.files
-                .editedFile(router.query.file as string)
-                .then((r) => r.url)
-            : API.files
-                .downloadFile(router.query.file as string)
-                .then((r) => r.url);
-        }
-
-        return API.files.downloadFile(file.id).then((r) => r.url);
-      })();
-
+      const fileUrl = await getFileUrl(router?.query?.file as string || file.id);
       const pdfCover = await generatePDFCover({
         pdfFileUrl: fileUrl,
         width: 640,
@@ -235,9 +155,9 @@ export const usePaymentPageInteractor = (): IPaymentPageInteractor => {
     } finally {
       setIsImageLoading(false);
     }
-  };
+  }, [file, router.query, generatePDFCover, getFileUrl]);
 
-  const loadImageCover = async () => {
+  const loadImageCover = useCallback (async () => {
     if (
       !file ||
       !imagesFormat.includes(file.internal_type) ||
@@ -251,286 +171,54 @@ export const usePaymentPageInteractor = (): IPaymentPageInteractor => {
     ) {
       return;
     }
-    const fileUrl = await (async () => {
-      if (router.query?.file) {
-        return router.query.editedFile === "true"
-          ? API.files.editedFile(router.query.file as string).then((r) => r.url)
-          : API.files
-              .downloadFile(router.query.file as string)
-              .then((r) => r.url);
-      }
-
-      return API.files.downloadFile(file.id).then((r) => r.url);
-    })();
-
+    const fileUrl = await getFileUrl(router?.query?.file as string || file.id);
     setFileLink(fileUrl);
-  };
+  }, [file, router.query, getFileUrl]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadPdfCover();
     loadImageCover();
-  }, [loadImageCover, loadPdfCover]);
+  }, [loadPdfCover, loadImageCover]);
+
 
   const getPlans = (t: (key: string) => string): Plan[] => {
-    const getTrialFormattedPrice = (price: number, currency: string) => {
-      if (currency === "USD") {
-        return `$${price / 100}`;
+    return products.map((product) => {
+      const trialPrice = getTrialFormattedPrice(product?.price?.trial_price!,product?.price?.currency);
+      const annualPrice = getAnnualFormattedPrice(product?.price?.price!,product?.price?.currency);
+      const text =  product?.name === PaymentPlanId.MONTHLY ? "payment_page.plans.monthly.text" :
+        product?.name === PaymentPlanId.MONTHLY_FULL ? "payment_page.plans.annual.text" : "payment_page.plans.monthly_full.text"
+      return {
+        id: product?.name as PaymentPlanId,
+        title: product?.name === PaymentPlanId.MONTHLY ? t("payment_page.plans.monthly.title") 
+        :  product?.name === PaymentPlanId.MONTHLY_FULL ?  t("payment_page.plans.monthly_full.title") 
+        : t('payment_page.plans.annual.title'),
+        price: product?.name === PaymentPlanId.ANNUAL ? annualPrice : trialPrice,
+        fullPrice: product?.name !== PaymentPlanId.ANNUAL ? trialPrice : null,
+        formattedCurrency: getCurrency(product?.price?.currency),
+        date: product?.name === PaymentPlanId.ANNUAL ? t("payment_page.plans.annual.date") : null,
+         //@ts-ignore
+        text: t(text, { formattedPrice: trialPrice }),
+        bullets: Array.from(Array(8).keys()).map((item) => {
+          return {
+            imgSrc: product?.name === PaymentPlanId.MONTHLY && (item !== 0 && item !== 1 && item !== 2 ) ? cross : check,
+            bullText: <span>{t(`payment_page.plans.bullet${item + 1}`)}</span>
+          }
+        })
       }
-
-      if (currency === "GBP") {
-        return `£${price / 100}`;
-      }
-
-      return `€${price / 100}`;
-    };
-
-    const getAnnualFormattedPrice = (price: number, currency: string) => {
-      if (price === 19900) {
-        return `€${price / 100 / 12}`;
-      }
-      if (currency === "USD") {
-        return `$${price / 100 / 12}`;
-      }
-
-      if (currency === "GBP") {
-        return `$${price / 100 / 12}`;
-      }
-      return `€${price / 100 / 12}`;
-    };
-
-    const getCurrency = (currency: string) => {
-      if (currency === "USD") {
-        return "$";
-      }
-
-      if (currency === "GBP") {
-        return "£";
-      }
-
-      return "€";
-    };
-
-    return [
-      {
-        id: products[0]?.name as PaymentPlanId,
-        title: t("payment_page.plans.monthly.title"),
-        price: getTrialFormattedPrice(
-          products[0]?.price!.trial_price!,
-          products[0]?.price!.currency
-        ),
-        fullPrice: getTrialFormattedPrice(
-          products[0]?.price?.price,
-          products[0]?.price?.currency
-        ),
-        formattedCurrency: getCurrency(products[0]?.price.currency),
-        date: null,
-        bullets: [
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.monthly.bullet1")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.monthly.bullet2")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.monthly.bullet3")}</span>,
-          },
-          {
-            imgSrc: cross,
-            bullText: (
-              <span className="text-[#878787]">
-                {t("payment_page.plans.monthly.bullet4")}
-              </span>
-            ),
-          },
-          {
-            imgSrc: cross,
-            bullText: (
-              <span className="text-[#878787]">
-                {t("payment_page.plans.monthly.bullet5")}
-              </span>
-            ),
-          },
-          {
-            imgSrc: cross,
-            bullText: (
-              <span className="text-[#878787]">
-                {t("payment_page.plans.monthly.bullet6")}
-              </span>
-            ),
-          },
-          {
-            imgSrc: cross,
-            bullText: (
-              <span className="text-[#878787]">
-                {t("payment_page.plans.monthly.bullet7")}
-              </span>
-            ),
-          },
-          {
-            imgSrc: cross,
-            bullText: (
-              <span className="text-[#878787]">
-                {t("payment_page.plans.monthly.bullet8")}
-              </span>
-            ),
-          },
-        ],
-        //@ts-ignore
-        text: t("payment_page.plans.monthly.text", {
-          formattedPrice: getTrialFormattedPrice(
-            products[0]?.price?.price,
-            products[0]?.price?.currency
-          ),
-        }),
-      },
-      {
-        id: products[1]?.name as PaymentPlanId,
-        title: t("payment_page.plans.monthly_full.title"),
-        price: getTrialFormattedPrice(
-          products[1]?.price?.trial_price!,
-          products[1]?.price?.currency
-        ),
-        fullPrice: getTrialFormattedPrice(
-          products[1]?.price?.price,
-          products[1]?.price?.currency
-        ),
-        formattedCurrency: getCurrency(products[1]?.price.currency),
-        date: null,
-        bullets: [
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet1")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet2")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet3")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet4")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet5")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet6")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet7")}</span>
-            ),
-          },
-          {
-            imgSrc: check,
-            bullText: (
-              <span>{t("payment_page.plans.monthly_full.bullet8")}</span>
-            ),
-          },
-        ],
-        // @ts-ignore
-        text: t("payment_page.plans.monthly_full.text", {
-          formattedPrice: getTrialFormattedPrice(
-            products[1]?.price?.price,
-            products[1]?.price?.currency
-          ),
-        }),
-      },
-      {
-        id: products[2]?.name as PaymentPlanId,
-        title: t("payment_page.plans.annual.title"),
-        price: getAnnualFormattedPrice(
-          products[2]?.price?.price,
-          products[2]?.price?.currency
-        ),
-        date: t("payment_page.plans.annual.date"),
-        bullets: [
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet1")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet2")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet3")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet4")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet5")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet6")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet7")}</span>,
-          },
-          {
-            imgSrc: check,
-            bullText: <span>{t("payment_page.plans.annual.bullet8")}</span>,
-          },
-        ],
-        // @ts-ignore
-        text: t("payment_page.plans.annual.text", {
-          formattedPrice: getTrialFormattedPrice(
-            products[2]?.price?.price,
-            products[2]?.price?.currency
-          ),
-        }),
-      },
-    ];
+    });
   };
 
   return {
     selectedPlan,
     onSelectPlan,
     onContinue,
-    onCommentsFlip,
-
-    imagePDF: imagePDF ? imagePDF : null,
+    imagePDF: imagePDF || null,
     isImageLoading,
-    fileName: file ? file.filename : null,
     fileType: file ? file.internal_type : null,
     fileLink,
-    isEditorFlow:
-      (router.query?.source === "editor" ||
-        router.query?.source === "account") &&
-      router.query.convertedFrom === undefined,
-    isSecondEmail: router.query?.fromEmail === "true",
-    isThirdEmail: router.query?.fromEmail === "true",
-
+    isEmail: router.query?.fromEmail === "true",
     isRemoteConfigLoading,
-
-    getPlans,
     isPlansLoading: products.length === 0,
+    getPlans,
   };
 };

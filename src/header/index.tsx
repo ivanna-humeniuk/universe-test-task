@@ -1,11 +1,11 @@
 import check from "../header/assets/check.svg";
-import { PAGE_LINKS } from "../modules/choose-plan-page/interactor";
 import logo_new from "./assets/logo.svg";
 import classNames from "classnames";
 import { useTranslation } from "next-i18next";
 import Image from "next/image";
 import Link from "next/link";
 import React from "react";
+import { PAGE_LINKS } from "../types";
 
 export const pathsForNewLayout = [
   "pdf_to_word",
